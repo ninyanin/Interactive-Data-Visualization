@@ -1,0 +1,393 @@
+#!/bin/bash
+#Yanin Niramai
+#260983558
+errorMsg() {
+	echo "Error: $1"
+	echo "Script syntax: ./covidata.sh -r procedure id range inputFile outputFile compareFile"
+	echo -e "Legal usage examples: ./covidata.sh get 35 data.csv result.csv\n./covidata.sh -r get 35 2020-01 2020-03 data.csv result.csv\n./covidata.sh compare 10 data.csv result2.csv result.csv\n./covidata.sh -r compare 10 2020-01 2020-03 data.csv result2.csv result.csv"
+	exit 0
+}
+if [[ $# -eq 2 || $# -gt 2 ]]
+then
+	if [[ $1 != "get" && $1 != "compare" ]]
+	then
+		if [[ $2 != "get" && $2 != "compare" ]]
+		then
+                	errorMsg "Procedure not provided"
+                	exit 1
+		fi
+	fi
+else
+	 errorMsg "Wrong number of arguments"
+fi
+
+if [[ $1 = "get" ]]
+then
+	if [[ $# != 4 ]]
+        then
+                errorMsg "Wrong number of arguments"
+        fi
+	if [[ -f $3 ]]
+	then
+		awk 'BEGIN{ FS="," } { if($1 ~ /'$2'/) { print $0 } }' < $3 > $4
+
+	else
+		errorMsg "Input file name does not exist"
+	fi
+	row=`grep -c $2 $4`
+	conf=`cat $4 | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+	aveconfcase=$((conf / row))
+	death=`cat $4 | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+	avedeath=$((death / row))
+	numtest=`cat $4 | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+	avetest=$((numtest / row))
+	echo "rowcount,avgconf,avgdeaths,avgtests" >> $4
+	echo "$row, $aveconfcase, $avedeath, $avetest" >> $4
+fi
+if [[ $1 = "compare" ]]
+then
+        if [[ $# != 5 ]]
+        then
+                errorMsg "Wrong number of arguments"
+        fi
+        if [[ -f $3 ]]
+        then
+                awk 'BEGIN{ FS="," } { if($1 ~ /'$2'/) { print $0 } }' < $3 > $4
+        else
+                errorMsg "Input file name does not exist"
+	fi
+	#data for result2.csv
+	row=`wc -l $4 | awk {'print $1'}`
+        conf=`cat $4 | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+        aveconfcase=$((conf / row))
+        death=`cat $4 | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+        avedeath=$((death / row))
+        numtest=`cat $4 | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+        avetest=$((numtest / row))
+	head -n -2 $5 | cat >> $4
+	echo "rowcount,avgconf,avgdeaths,avgtests" >> $4
+        echo "$row, $aveconfcase, $avedeath, $avetest" >> $4
+	tail -n2 $5 | cat >> $4
+	#data for result.csv
+	row2=`tail -n1 $5 | awk 'BEGIN{ FS="," } END { print $1 }'`
+	conf2=`tail -n1 $5 | awk 'BEGIN{ FS=", " } END { print $2 }'`
+	death2=`tail -n1 $5 | awk 'BEGIN{ FS=", " } END { print $3 }'`
+	test2=`tail -n1 $5 | awk 'BEGIN{ FS=", " } END { print $4 }'`
+	difrow=$(( row-row2 ))
+	difconf=$(( aveconfcase-conf2 ))
+	difdeath=$(( avedeath-death2 ))
+	diftest=$(( avetest-test2 ))
+	echo "diffcount,diffavgconf,diffavgdeath,diffavgtests" >> $4
+	echo "$difrow, $difconf, $difdeath, $diftest" >> $4
+fi
+
+#r switch
+if [[ $1 = "-r" ]]
+then
+	if [[ $2 = "get" ]]
+	then
+		if [[ $# != 7 ]]
+		then
+			errorMsg "Wrong number of arguments"
+		fi
+		if [[ -f $6 ]]
+        	then
+			#start month
+			x=$4
+			syear=${x:0:4}
+			smonth=${x:5:2}
+			smonth1=${x:5:2}
+			#end month
+			y=$5
+			eyear=${y:0:4}
+                        emonth=${y:5:2}
+			startDay=01
+                        endDay=15
+			while [[ $smonth1 -lt $emonth || $smonth1 -eq $emonth ]]
+			do
+				if [[ $smonth1 != $smonth && $smonth1 -lt 10 ]]
+				then
+					date=$syear-0$smonth1
+				else	
+					date=$syear-$smonth1
+				fi
+				if [[ $date == $x ]]
+				then
+					awk 'BEGIN{ FS="," } { if($1 ~ /'$3'/ && $5 ~ /'$date'/) { print $0 } }' < $6 > temp.sh
+					date2=$date-
+					cat temp.sh | grep -E $date2[0][123456789] temp.sh > $7
+					cat temp.sh | grep -E $date2[1][012345] temp.sh >> $7
+					cat temp.sh | grep -E $date2[0][123456789] temp.sh > temp1.sh
+                                        cat temp.sh | grep -E $date2[1][012345] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+					conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+        				death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+        				numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+					if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+                                        fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" > stats.sh
+					cat temp.sh | grep -E $date2[1][6789] temp.sh >> $7
+					cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> $7
+					cat temp.sh | grep -E $date2[3][01] temp.sh >> $7
+					cat temp.sh | grep -E $date2[1][6789] temp.sh >> temp1.sh
+                                        cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> temp1.sh
+                                        cat temp.sh | grep -E $date2[3][01] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+                                        conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                        death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+					numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+                                        if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+                                        fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+					rm temp1.sh
+				else
+					awk 'BEGIN{ FS="," } { if($1 ~ /'$3'/ && $5 ~ /'$date'/) { print $0 } }' < $6 >> temp.sh
+					date2=$date-
+                                        cat temp.sh | grep -E $date2[0][123456789] temp.sh >> $7
+                                        cat temp.sh | grep -E $date2[1][012345] temp.sh >> $7
+					cat temp.sh | grep -E $date2[0][123456789] temp.sh > temp1.sh
+                                        cat temp.sh | grep -E $date2[1][012345] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+                                        conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                        death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+                                        numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+                                        if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+                                        fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+                                        rm temp1.sh
+					cat temp.sh | grep -E $date2[1][6789] temp.sh >> $7
+                                        cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> $7
+                                        cat temp.sh | grep -E $date2[3][01] temp.sh >> $7
+					cat temp.sh | grep -E $date2[1][6789] temp.sh >> temp1.sh
+                                        cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> temp1.sh
+                                        cat temp.sh | grep -E $date2[3][01] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+                                        conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                        death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+                                        numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+                                        if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+                                        fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+                                        rm temp1.sh
+				fi
+				smonth1=$(( $smonth1+1 ))
+			done
+			echo "rowcount,avgconf,avgdeath,avgtests" >> $7
+			cat stats.sh >> $7
+			rm stats.sh
+			rm temp.sh
+                else
+			errorMsg "Input file name does not exist"
+		fi
+	fi
+	if [[ $2 = "compare" ]]
+        then
+               	if [[ $# != 8 ]]
+               	then
+                       	errorMsg "Wrong number of arguments"
+               	fi
+		if [[ -f $6 ]]
+        	then
+			x=$4
+                       	syear=${x:0:4}
+                       	smonth=${x:5:2}
+                       	smonth1=${x:5:2}
+                       	#end month
+                       	y=$5
+                       	eyear=${y:0:4}
+                       	emonth=${y:5:2}
+                       	startDay=01
+                       	endDay=15
+			difmonth=$(( $emonth-$smonth+1 ))
+                       	while [[ $smonth1 -lt $emonth || $smonth1 -eq $emonth ]]
+                       	do
+                               	if [[ $smonth1 != $smonth && $smonth1 -lt 10 ]]
+				then
+					date=$syear-0$smonth1
+                                else
+					date=$syear-$smonth1
+                                fi
+                               	if [[ $date == $x ]]
+                               	then
+                                       	awk 'BEGIN{ FS="," } { if($1 ~ /'$3'/ && $5 ~ /'$date'/) { print $0 } }' < $6 > temp.sh
+                                       	date2=$date-
+                                       	cat temp.sh | grep -E $date2[0][123456789] temp.sh > $7
+                                       	cat temp.sh | grep -E $date2[1][012345] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[0][123456789] temp.sh > temp1.sh
+                                       	cat temp.sh | grep -E $date2[1][012345] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+                                       	conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                       	death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+                                       	numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+					if [[ $row -eq 0 ]]
+					then
+						aveconfcase=0
+						avedeath=0
+						avetest=0
+					else
+						aveconfcase=$((conf / row))
+						avedeath=$((death / row))
+						avetest=$((numtest / row))
+					fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" > stats.sh
+                                       	rm temp1.sh
+                                      	cat temp.sh | grep -E $date2[1][6789] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[3][01] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[1][6789] temp.sh >> temp1.sh
+                                       	cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> temp1.sh
+                                       	cat temp.sh | grep -E $date2[3][01] temp.sh >> temp1.sh
+					row=`grep -c $3 temp1.sh`
+                                       	conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                       	death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+					numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+					if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+					fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+					rm temp1.sh
+                       	        else
+                               	        awk 'BEGIN{ FS="," } { if($1 ~ /'$3'/ && $5 ~ /'$date'/) { print $0 } }' < $6 >> temp.sh
+                               	        date2=$date-
+                         	        cat temp.sh | grep -E $date2[0][123456789] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[1][012345] temp.sh >> $7
+                                      	cat temp.sh | grep -E $date2[0][123456789] temp.sh > temp1.sh
+                                       	cat temp.sh | grep -E $date2[1][012345] temp.sh >> temp1.sh
+                                       	row=`grep -c $3 temp1.sh`
+                                       	conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                       	death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+                                       	numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+					if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+					fi
+                                       	echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+                                       	rm temp1.sh
+                                       	cat temp.sh | grep -E $date2[1][6789] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[3][01] temp.sh >> $7
+                                       	cat temp.sh | grep -E $date2[1][6789] temp.sh >> temp1.sh
+                                       	cat temp.sh | grep -E $date2[2][0123456789] temp.sh >> temp1.sh
+                                       	cat temp.sh | grep -E $date2[3][01] temp.sh >> temp1.sh
+                                       	row=`grep -c $3 temp1.sh`
+                                       	conf=`cat temp1.sh | awk 'BEGIN{ FS="," } { confirmcase += $6 } END { print confirmcase }'`
+                                       	death=`cat temp1.sh | awk 'BEGIN{ FS="," } { confdeath += $8 } END { print confdeath }'`
+					numtest=`cat temp1.sh | awk 'BEGIN{ FS="," } { test += "${11}" } END { print test }'`
+					if [[ $row -eq 0 ]]
+                                        then
+                                                aveconfcase=0
+                                                avedeath=0
+                                                avetest=0
+                                        else
+                                                aveconfcase=$((conf / row))
+                                                avedeath=$((death / row))
+                                                avetest=$((numtest / row))
+					fi
+					echo "$row, $aveconfcase, $avedeath, $avetest" >> stats.sh
+                                       	rm temp1.sh
+                               	fi
+				smonth1=$(( $smonth1+1 ))
+			done
+			row4=$(( $difmonth*2 ))
+			row5=$(( $row4+1 ))
+			head -n -$row5 $8 | cat >> $7
+			echo "rowcount,avgconf,avgdeath,avgtests" >> $7
+                       	cat stats.sh >> $7
+			tail -n$row4 $8 | cat > stats1.sh                      
+                       	rm temp.sh
+			tail -n$row5 $8 | cat >> $7
+			cat stats.sh | awk 'BEGIN{ FS=", " } { print $1 }' > rowstats.sh
+			cat stats1.sh | awk 'BEGIN{ FS=", " } { print $1 }' >> rowstats.sh
+			cat stats.sh | awk 'BEGIN{ FS=", " } { print $2 }' > confstats.sh
+                        cat stats1.sh | awk 'BEGIN{ FS=", " } { print $2 }' >> confstats.sh
+			cat stats.sh | awk 'BEGIN{ FS=", " } { print $3 }' > deathstats.sh
+                        cat stats1.sh | awk 'BEGIN{ FS=", " } { print $3 }' >> deathstats.sh
+			cat stats.sh | awk 'BEGIN{ FS=", " } { print $4 }' > teststats.sh
+                        cat stats1.sh | awk 'BEGIN{ FS=", " } { print $4 }' >> teststats.sh
+			i=1
+			while [[ $i -lt $row4 || $i -eq $row4 ]]
+			do
+				if [[ $i -eq 1 ]]
+				then
+					row1=`head -n$i rowstats.sh`
+					row2=`tail -n$row4 rowstats.sh | head -n1`
+					rowadd=$(( row1-row2 ))
+					conf1=`head -n$i confstats.sh`
+                                        conf2=`tail -n$row4 confstats.sh | head -n1`
+                                        confadd=$(( conf1-conf2 ))
+					death1=`head -n$i deathstats.sh`
+                                        death2=`tail -n$row4 deathstats.sh | head -n1`
+                                        deathadd=$(( death1-death2 ))
+					test1=`head -n$i teststats.sh`
+                                        test2=`tail -n$row4 teststats.sh | head -n1`
+                                        testadd=$(( test1-test2 ))
+					echo "diffcount,diffavgconf,diffavgdeath,diffavgtests" >> $7
+					echo "$rowadd,$confadd,$deathadd,$testadd" >> $7
+				else
+
+					row1=`head -n$i rowstats.sh | tail -n1`
+					row2=`tail -n$(( row4-i+1 )) rowstats.sh | head -n 1`
+					rowadd=$(( row1-row2 ))
+					conf1=`head -n$i confstats.sh | tail -n1`
+                                        conf2=`tail -n$(( row4-i+1 )) confstats.sh| head -n 1`
+                                        confadd=$(( conf1-conf2 ))
+					death1=`head -n$i deathstats.sh  | tail -n1`
+                                        death2=`tail -n$(( row4-i+1 )) deathstats.sh  | head -n 1`
+                                        deathadd=$(( death1-death2 ))
+					test1=`head -n$i teststats.sh | tail -n1`
+                                        test2=`tail -n$(( row4-i+1 )) teststats.sh | head -n 1`
+                                        testadd=$(( test1-test2 ))
+					echo "$rowadd,$confadd,$deathadd,$testadd" >> $7
+				fi
+				i=$(( i+1 ))	
+			done
+			rm rowstats.sh confstats.sh deathstats.sh teststats.sh
+			rm stats.sh stats1.sh
+		fi
+	fi
+fi
